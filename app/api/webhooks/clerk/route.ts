@@ -1,29 +1,68 @@
 export const dynamic = "force-dynamic";
 
 import { Webhook } from "svix";
-import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 
 export async function POST(req: Request) {
   try {
+    // Leer headers directo del request (Next 16 compatible)
+    const svix_id = req.headers.get("svix-id");
+    const svix_signature = req.headers.get("svix-signature");
+    const svix_timestamp = req.headers.get("svix-timestamp");
+
+    if (!svix_id || !svix_signature || !svix_timestamp) {
+      return new Response("Missing Svix headers", { status: 400 });
+    }
+
+    const payload = await req.text();
+
+    // Validar firma
     const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET!);
 
-    const rawBody = await req.text();
-    const h = await headers();
+    const evt = wh.verify(payload, {
+      "svix-id": svix_id,
+      "svix-signature": svix_signature,
+      "svix-timestamp": svix_timestamp,
+    }) as any;
 
-    const headerPayload = {
-      "svix-id": h.get("svix-id")!,
-      "svix-signature": h.get("svix-signature")!,
-      "svix-timestamp": h.get("svix-timestamp")!,
-    };
+    // ──────────────────────────────────────
+    // Extraer email correctamente de Clerk
+    // ──────────────────────────────────────
 
-    const event = wh.verify(rawBody, headerPayload) as any;
+    let email: string | null = null;
 
-    if (event.type === "user.created") {
-      const email = event.data.email_addresses[0].email_address;
+    // A) normal: viene en email_addresses
+    if (evt.data?.email_addresses?.length > 0) {
+      email = evt.data.email_addresses[0].email_address;
+    }
 
-      await prisma.user.create({
-        data: {
+    // B) si está vacío: buscar primary ID
+    if (!email && evt.data?.primary_email_address_id) {
+      const primary = evt.data.email_addresses?.find(
+        (x: any) => x.id === evt.data.primary_email_address_id
+      );
+      if (primary) email = primary.email_address;
+    }
+
+    // C) fallback
+    if (!email && evt.data?.email_address) {
+      email = evt.data.email_address;
+    }
+
+    if (!email) {
+      console.error("❌ WEBHOOK sin email:", evt.data);
+      return new Response("NO EMAIL", { status: 200 });
+    }
+
+    // ──────────────────────────────────────
+    // Registrar usuario
+    // ──────────────────────────────────────
+
+    if (evt.type === "user.created") {
+      await prisma.user.upsert({
+        where: { email },
+        update: {},
+        create: {
           email,
           role: "PILOT",
         },
