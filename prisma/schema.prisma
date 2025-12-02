@@ -1,0 +1,149 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model User {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  password  String?
+  displayName String?    @default("")
+  country     String?
+  role      UserRole  @default(PILOT)
+  createdAt DateTime  @default(now())
+
+  pilot     Pilot?
+  // Si el user es manager, estará asociado a Team a través de managerId
+  teamsManaged Team[] @relation("TeamManager")
+}
+
+enum UserRole {
+  PILOT
+  MANAGER
+  ADMIN
+}
+
+
+model Pilot {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @unique
+  user          User      @relation(fields: [userId], references: [id])
+
+  name          String
+  country       String
+  avatarUrl     String?
+
+  iracingId     Int?
+  iratingOval   Int?      @default(0)
+  iratingRoad   Int?      @default(0)
+  iratingFormula Int?     @default(0)
+  srOval        Float?    @default(0)
+  srRoad        Float?    @default(0)
+  srFormula     Float?    @default(0)
+
+  wrPointsTotal Int       @default(0)
+  wrPointsSplit Int       @default(0)
+  marketValue   Int       @default(0)
+
+  createdAt     DateTime  @default(now())
+
+  teamMemberships TeamMembership[]
+  raceResults   RaceResult[]
+  transferOffers TransferOffer[]
+
+}
+
+model Team {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
+  country     String
+  logoUrl     String?
+
+  managerId   Int?
+  manager     User? @relation("TeamManager", fields: [managerId], references: [id])
+
+  createdAt   DateTime         @default(now())
+  members     TeamMembership[]
+  incomingOffers TransferOffer[] @relation("teamTo")
+  outgoingOffers TransferOffer[] @relation("teamFrom")
+}
+
+
+model TeamMembership {
+  id          Int        @id @default(autoincrement())
+  teamId      Int
+  pilotId     Int
+  role        TeamRole
+  contractEnd DateTime?
+  clause      Int?       // clausula de rescisión
+
+  team        Team       @relation(fields: [teamId], references: [id])
+  pilot       Pilot      @relation(fields: [pilotId], references: [id])
+}
+
+enum TeamRole {
+  TITULAR
+  ACADEMIA
+  MANAGER
+}
+
+model Season {
+  id      Int      @id @default(autoincrement())
+  year    Int
+  splits  Split[]
+}
+
+model Split {
+  id        Int      @id @default(autoincrement())
+  seasonId  Int
+  index     Int      // 1,2,3,4
+
+  season    Season   @relation(fields: [seasonId], references: [id])
+  raceResults RaceResult[]
+}
+
+model RaceResult {
+  id          Int       @id @default(autoincrement())
+  pilotId     Int
+  splitId     Int
+
+  irChange    Int
+  sof         Int
+  pointsWR    Int
+  incidents   Int
+  hasPole     Boolean @default(false)
+  hasFastLap  Boolean @default(false)
+
+  createdAt   DateTime @default(now())
+
+  pilot       Pilot    @relation(fields: [pilotId], references: [id])
+  split       Split    @relation(fields: [splitId], references: [id])
+}
+
+model TransferOffer {
+  id          Int        @id @default(autoincrement())
+  teamFromId  Int?
+  teamToId    Int
+  pilotId     Int
+  amount      Int
+  status      OfferStatus @default(PENDING)
+
+  createdAt   DateTime @default(now())
+
+  pilot       Pilot     @relation(fields: [pilotId], references: [id])
+  teamTo      Team      @relation("teamTo", fields: [teamToId], references: [id])
+  teamFrom    Team?     @relation("teamFrom", fields: [teamFromId], references: [id])
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
