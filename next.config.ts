@@ -1,9 +1,8 @@
-/** @type {import('next').NextConfig} */
+/** @type {import("next").NextConfig} */
 const nextConfig = {
-  experimental: {
-    turbo: false, // ❌ DESACTIVA TURBOPACK
-  },
+  output: "standalone",
 };
 
 export default nextConfig;
+
 
