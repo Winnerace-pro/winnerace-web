@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "build": "prisma generate && next build",
+    "postinstall": "prisma generate",
+    "start": "next start"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.35.5",
@@ -30,3 +30,4 @@
     "typescript": "^5"
   }
 }
+
